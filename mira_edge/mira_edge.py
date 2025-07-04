@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Callable
 
 import serial
+from happyserial import HappySerial
 
 from mira_edge.mira_protocol import Frame, Header
 from mira_edge.model import EdgeEvent, GatewayInfo, MiraGateway, MiraNode
@@ -22,28 +23,22 @@ class MiraEdge:
     port: str | None = None
     baudrate: int = 1_000_000
     gateway: MiraGateway = field(default_factory=MiraGateway)
-    serial_interface: SerialAdapter | None = None
+    serial_interface: HappySerial.HappySerial | None = None
     last_received_serial_data: datetime = field(
         default_factory=lambda: datetime.now()
     )
     started_ts: datetime = field(default_factory=lambda: datetime.now())
 
     def __post_init__(self):
-        try:
-            if self.port is None:
-                self.port = get_default_port()
-            self.serial_interface = SerialAdapter(self.port, self.baudrate)
-        except (
-            SerialInterfaceException,
-            serial.SerialException,
-        ) as exc:
-            print(f"Error: {exc}")
+        if self.port is None:
+            self.port = get_default_port()
 
     @property
     def serial_connected(self) -> bool:
         return (
-            self.serial_interface is not None
-            and self.serial_interface.serial is not None
+            self.serial_interface
+            is not None
+            # and self.serial_interface.serial is not None
         )
 
     def on_data_received(self, data: bytes):
@@ -53,6 +48,7 @@ class MiraEdge:
         self.last_received_serial_data = datetime.now()
 
         event_type = data[0]
+        print(bytes(data).hex())
 
         if event_type == EdgeEvent.NODE_JOINED:
             address = int.from_bytes(data[1:9], "little")
@@ -93,17 +89,19 @@ class MiraEdge:
             print("?", end="", flush=True)
 
     def connect_to_gateway(self):
-        assert self.serial_interface is not None
-        self.serial_interface.init(self.on_data_received)
+        # assert self.serial_interface is not None
+        self.serial_interface = HappySerial.HappySerial(
+            self.port, self.on_data_received
+        )
 
     def disconnect_from_gateway(self):
         assert self.serial_interface is not None
-        self.serial_interface.close()
+        # self.serial_interface.close()
 
     def send_frame(self, dst: int, payload: bytes):
         assert self.serial_interface is not None
         frame = Frame(Header(destination=dst), payload=payload)
-        self.serial_interface.send_data(frame.to_bytes())
+        self.serial_interface.tx(frame.to_bytes())
         if node := self.gateway.get_node(dst):
             node.register_sent_frame(frame)
         self.gateway.register_sent_frame(frame)
