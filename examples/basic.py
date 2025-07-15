@@ -35,7 +35,7 @@ def on_event(event: EdgeEvent, event_data: MiraNode | Frame):
 )
 def main(port: str | None):
     """Basic example of using MiraEdge to communicate with nodes."""
-    mira = MiraEdge(on_event=on_event, port=port)
+    mira = MiraEdge(on_event, port=port)
     tui = MiraEdgeTUI()
 
     try:
